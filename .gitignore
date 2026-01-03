@@ -10,6 +10,7 @@ data/multiple_clean/
 data/piles/
 data/converted/
 data/masks/
+data/ldraw/
 
 # Keep metadata structure but ignore large data files
 data/metadata/*.json
