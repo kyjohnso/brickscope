@@ -1,0 +1,630 @@
+# VisioneerLabs BrickScope - Project Brief & Decisions
+
+**Project Lead:** Kyle  
+**Date:** January 2026  
+**Status:** Phase 1 - Synthetic Data Generation via Blender  
+**Repository:** `visioneerlabs/brickscope`
+
+---
+
+## Project Overview
+
+**VisioneerLabs BrickScope** is an AI-powered AR system that helps users find specific LEGO pieces in large, chaotic piles using computer vision and grounded object detection.
+
+**Tagline:** "Scope out exactly what you need"
+
+### Core Use Case
+- User has massive LEGO pile (example: 3ft × 2ft × 2ft bucket, ~150k pieces)
+- User wants to build specific set (e.g., Black Seas Barracuda #6285)
+- System highlights only the pieces needed from that set
+- Ignores 1000+ other pieces in the pile
+
+### Key Innovation
+**Selective Grounded Detection:** Among 150 visible pieces in camera frame, only detect/highlight the 10-50 pieces user actually needs based on text query.
+
+---
+
+## Strategic Decisions
+
+### 1. Vision Models (Comparative Study)
+
+**Primary Model: Grounding-DINO** ⭐  
+- Purpose-built for text-grounded object detection
+- Best at dense scenes with selective filtering
+- Speed: 5-8 fps on RTX 3090
+- Open source (Apache 2.0)
+- Fine-tunable on single 3090
+
+**Secondary Model: Florence-2 (Comparison)**  
+- Vision-language foundation model
+- More flexible, slower (3-5 fps)
+- Research comparison potential
+
+**MSc Research Angle:** Comparative analysis of Florence-2 vs Grounding-DINO on dense LEGO detection could be novel research contribution.
+
+### 2. Hardware Architecture
+
+```
+┌─────────────────────────────────┐
+│  Linux Workstation (3090)       │
+│  - Training (Blender + ML)      │
+│  - Inference Server (FastAPI)   │
+└────────────┬────────────────────┘
+             │ WiFi/Network
+             ↓
+┌─────────────────────────────────┐
+│  iPad Air M1 (5th Gen)          │
+│  - ARKit camera                 │
+│  - Stream to server             │
+│  - AR overlay rendering         │
+└─────────────────────────────────┘
+```
+
+**Key Decision:** All heavy compute on Linux 3090, iPad is thin AR client.
+
+### 3. Platform & Licensing
+
+- **Open Source:** Apache 2.0 license
+- **Repository:** `github.com/visioneerlabs/brickscope`
+- **Cross-platform training data:** Works for Grounding-DINO, Florence-2, YOLO, etc.
+- **No vendor lock-in:** Train once on Linux, deploy anywhere
+
+---
+
+## Synthetic Data Generation Strategy
+
+### Current Phase: Blender Addon Development
+
+**Tool:** VS Code + Claude Code for Blender addon  
+**Goal:** Generate 1M+ training images with rich annotations
+
+### Three Scene Types
+
+**1. Single Pieces (30% - 300k images)**
+```
+- 1 piece per image
+- Fully visible (visibility = 1.0)
+- Clean training signal
+- All rotations, lighting, backgrounds
+- Purpose: Foundation learning
+```
+
+**2. Multiple Pieces, No Occlusion (30% - 300k images)**
+```
+- 5-25 pieces per image
+- Grid or scattered layout
+- No overlapping bboxes
+- All pieces visible (visibility = 1.0)
+- Purpose: Multi-object detection training
+```
+
+**3. Piles - Dense & Occluded (40% - 400k images)**
+```
+- 30-150 pieces per image
+- Heavy occlusion (30-90% average)
+- Realistic pile physics
+- Partial visibility common
+- Purpose: Real-world scenario
+```
+
+### Progressive Generation Plan
+
+```
+Phase 1: 10k images (validate pipeline)
+Phase 2: 100k images (baseline training)
+Phase 3: 500k images (competitive performance)
+Phase 4: 1M+ images (only if needed)
+```
+
+**Rationale:** Validate quality before generating millions. Diminishing returns likely after 100-500k.
+
+---
+
+## Data Format Specification
+
+### Rich Intermediate Format (JSON)
+
+**Design Principle:** Output comprehensive JSON from Blender, then write lightweight converters to model-specific formats.
+
+```
+Blender → Rich JSON → Converters → Florence-2 / Grounding-DINO / YOLO
+```
+
+### Per-Image Annotation Structure
+
+```json
+{
+  "format_version": "1.0",
+  "generator": "VisioneerLabs BrickScope Blender Addon v0.1",
+  
+  "image_metadata": {
+    "file_path": "images/pile_000001.png",
+    "width": 1024,
+    "height": 1024,
+    "scene_id": "batch_001_scene_042",
+    "scene_type": "pile" | "single_piece" | "multiple_no_occlusion",
+    "difficulty": "easy" | "medium" | "hard",
+    "render_samples": 128,
+    "camera": {
+      "position": [x, y, z],
+      "rotation": [rx, ry, rz],
+      "fov": 50,
+      "lens_mm": 50
+    },
+    "lighting": {
+      "hdri": "studio_small_08.exr",
+      "intensity": 1.2
+    }
+  },
+  
+  "objects": [
+    {
+      // IDENTITY
+      "piece_id": "3001",
+      "color_id": "red",
+      "color_name": "Bright Red",
+      "category": "brick",
+      "piece_name": "Brick 2x4",
+      "part_number": "300121",
+      
+      // 2D SPATIAL (absolute pixels)
+      "bbox": [120, 150, 220, 250],  // [x1, y1, x2, y2] in pixels
+      "center_2d": [170, 200],
+      "area_pixels": 10000,
+      
+      // 3D SPATIAL (Blender world space)
+      "position_3d": [0.05, 0.02, 0.01],
+      "rotation_3d": [15, 45, 90],
+      "bbox_3d_corners": [[...], [...], ...],
+      
+      // VISIBILITY/OCCLUSION
+      "visibility": 0.65,  // 0.0-1.0
+      "is_fully_visible": false,
+      "is_partially_occluded": true,
+      "occluding_objects": ["3002_blue", "3003_black"],
+      "distance_from_camera": 0.45,
+      "z_order": 12,
+      "in_frame": true,
+      
+      // TEXT DESCRIPTIONS (multiple variants)
+      "captions": {
+        "short": "red brick",
+        "medium": "red 2x4 brick",
+        "long": "red 2x4 LEGO brick part 3001",
+        "natural": "a rectangular red LEGO brick measuring 2 by 4 studs",
+        "attributes": "color: red, size: 2x4, type: brick, category: standard"
+      },
+      
+      // METADATA
+      "object_index": 0,
+      "spatial_neighbors": ["3002_blue"],
+      
+      // OPTIONAL: Segmentation
+      "segmentation_mask": "masks/pile_000001_obj_000.png",
+      "segmentation_polygon": [[x1,y1], [x2,y2], ...]
+    }
+    // ... more objects
+  ],
+  
+  "scene_metadata": {
+    "total_pieces": 87,
+    "visible_pieces": 52,
+    "pieces_in_frame": 48,
+    "avg_occlusion": 0.65,
+    "avg_visibility": 0.35,
+    "piece_count_by_category": {
+      "brick": 45,
+      "plate": 30,
+      "slope": 12
+    },
+    "piece_count_by_color": {
+      "red": 20,
+      "blue": 15,
+      "black": 10
+    },
+    "background_type": "wood_table",
+    "difficulty_score": 0.75
+  }
+}
+```
+
+### Critical Data Format Rules
+
+1. **Store absolute pixel coordinates** - Don't normalize in Blender
+   - Different models need different normalizations
+   - Easy to normalize later, impossible to denormalize
+   
+2. **Multiple caption variants** - Generate several text description styles
+   - Test which works best for each model
+   - Florence-2 might prefer longer captions
+   - Grounding-DINO might prefer shorter
+
+3. **Include visibility/occlusion metrics**
+   - Essential for training on hard examples
+   - Enables curriculum learning (easy→hard)
+   - Important for evaluation stratification
+
+4. **Rich metadata enables research**
+   - Difficulty scores
+   - Scene statistics
+   - Spatial relationships
+
+---
+
+## Repository Structure
+
+```
+visioneerlabs/brickscope/
+├── README.md
+├── LICENSE (Apache 2.0)
+├── PROJECT_BRIEF.md              # This document
+│
+├── blender/                       # Synthetic data generation
+│   ├── addons/
+│   │   └── brickscope/           # Main Blender addon
+│   │       ├── __init__.py
+│   │       ├── scene_generators/
+│   │       ├── annotations/
+│   │       └── utils/
+│   ├── scripts/
+│   │   ├── generate_dataset.py
+│   │   └── batch_render.py
+│   └── assets/
+│       ├── hdris/
+│       ├── backgrounds/
+│       └── ldraw_parts/
+│
+├── data/                          # Dataset storage (gitignored)
+│   ├── single_pieces/
+│   ├── multiple_clean/
+│   ├── piles/
+│   ├── converted/
+│   └── metadata/
+│
+├── training/                      # Model training code
+│   ├── grounding_dino/
+│   │   ├── train.py
+│   │   ├── configs/
+│   │   └── checkpoints/
+│   ├── florence2/
+│   │   ├── train.py
+│   │   └── configs/
+│   └── converters/
+│       ├── to_grounding_dino.py
+│       ├── to_florence2.py
+│       └── to_coco.py
+│
+├── inference/                     # Production inference server
+│   ├── server.py                 # FastAPI server
+│   ├── models/
+│   ├── api/
+│   └── utils/
+│
+├── clients/                       # Client applications
+│   ├── ios/                      # iPad ARKit app
+│   │   └── BrickScope/
+│   ├── android/                  # Android app (future)
+│   └── web/                      # Web demo
+│
+├── evaluation/                    # Testing & metrics
+│   ├── evaluate.py
+│   ├── benchmarks/
+│   └── test_images/
+│
+├── docs/                          # Documentation
+│   ├── data_format.md
+│   ├── blender_addon_guide.md
+│   └── api_reference.md
+│
+└── scripts/                       # Utility scripts
+    ├── dataset_stats.py
+    ├── visualize_annotations.py
+    └── sync_models.sh
+```
+
+---
+
+## Dataset Organization
+
+```
+data/
+├── single_pieces/
+│   ├── images/
+│   │   ├── train/      (240k images)
+│   │   ├── val/        (30k images)
+│   │   └── test/       (30k images)
+│   └── annotations/    (JSON files)
+│
+├── multiple_clean/
+│   ├── images/
+│   │   ├── train/      (240k images)
+│   │   ├── val/        (30k images)
+│   │   └── test/       (30k images)
+│   └── annotations/
+│
+├── piles/
+│   ├── images/
+│   │   ├── train/      (320k images)
+│   │   ├── val/        (40k images)
+│   │   └── test/       (40k images)
+│   └── annotations/
+│
+├── converted/          (Generated by converter scripts)
+│   ├── florence2/
+│   │   ├── train.json
+│   │   └── val.json
+│   ├── grounding_dino/
+│   │   ├── train_annotations.json
+│   │   └── val_annotations.json
+│   └── coco/
+│       └── instances_train.json
+│
+├── masks/              (Optional: instance segmentation)
+│   ├── train/
+│   └── val/
+│
+└── metadata/
+    ├── piece_database.json      # All LEGO pieces catalog
+    ├── color_database.json      # LDraw color definitions
+    ├── scene_stats.json         # Dataset statistics
+    └── dataset_splits.json      # Train/val/test split info
+```
+
+---
+
+## LEGO Asset Preparation
+
+### LDraw Library
+
+**Source:** https://www.ldraw.org/  
+**License:** CC-BY-4.0  
+**Content:** ~10,000 official LEGO part models
+
+```bash
+# Download complete library
+wget https://library.ldraw.org/library/updates/complete.zip
+unzip complete.zip -d ~/ldraw
+
+# Directory structure
+~/ldraw/
+├── parts/          # Individual .dat files (3001.dat, 3002.dat, etc.)
+├── p/              # Primitives
+├── models/         # Complete models
+└── LDConfig.ldr    # Official LEGO color definitions
+```
+
+### Initial Part Set
+
+**Black Seas Barracuda (Set 6285):**
+- ~900 total pieces
+- ~100-150 unique part types
+- Good starter set for prototyping
+
+**Expansion Plan:**
+- Phase 1: Black Seas Barracuda parts (~150 types)
+- Phase 2: Common 500 pieces (80% coverage of most sets)
+- Phase 3: Full catalog (~3000-4000 active parts)
+
+---
+
+## Blender Generation Requirements
+
+### Scene Parameters by Type
+
+**Single Pieces:**
+```python
+pieces_per_scene: 1
+camera_distance: 15-30cm
+rotations: Random all axes
+lighting: Varied HDRIs
+backgrounds: Wood, plastic, fabric textures
+render_time: ~10 sec/image
+```
+
+**Multiple No-Occlusion:**
+```python
+pieces_per_scene: 5-25
+layout: Grid (3x3, 4x4, 5x5) or scattered
+min_spacing: 5-10mm between pieces
+no_bbox_overlap: True
+camera_angle: Overhead or 45°
+render_time: ~25 sec/image
+```
+
+**Piles:**
+```python
+pieces_per_scene: 30-150
+physics_simulation: Drop or random placement
+occlusion_levels: 30-90% average
+camera_angles: Overhead, 30°, 45°, 60°
+render_time: ~60 sec/image
+```
+
+### Domain Randomization
+
+**Essential variations:**
+- Camera position/angle
+- Lighting (multiple HDRIs)
+- Backgrounds
+- Piece rotations
+- Color distributions
+- Piece size distributions
+
+**Goal:** Synthetic→real domain gap minimization
+
+---
+
+## Render Performance Calculations
+
+### Computational Requirements
+
+```
+Estimated render times (Cycles, 128 samples, 1024px):
+
+Single piece:    10 sec/image × 300k = 833 hours
+Multiple pieces: 25 sec/image × 300k = 2,083 hours
+Piles:          60 sec/image × 400k = 6,667 hours
+
+Total for 1M images: ~9,583 hours = 400 days (single machine)
+
+Solutions:
+1. Parallel Blender instances (10 processes = 40 days)
+2. Multiple machines (10 machines = 4 days)
+3. Reduce samples (64 instead of 128 = 2× faster)
+4. Cloud rendering (AWS/GCP spot instances)
+```
+
+### Recommended Approach
+
+```
+Start small: 10k images in 4 days (single machine, 10 parallel)
+Validate quality and train initial models
+Scale based on results
+```
+
+---
+
+## Next Steps - Phase 1
+
+### 1. Blender Addon Development (VS Code + Claude Code)
+
+**Priority 1: Core Infrastructure**
+- [ ] LDraw import functionality
+- [ ] Scene type generators (single/multiple/pile)
+- [ ] Camera & lighting randomization
+- [ ] JSON annotation export
+
+**Priority 2: Quality Features**
+- [ ] Visibility/occlusion calculation
+- [ ] Multiple caption generation
+- [ ] Bbox validation (in-frame, valid coords)
+- [ ] Progress tracking & resumption
+
+**Priority 3: Scale Features**
+- [ ] Batch processing
+- [ ] Parallel rendering support
+- [ ] Error handling & logging
+- [ ] Dataset statistics generation
+
+### 2. Validation Dataset (10k images)
+
+**Goal:** Prove pipeline works end-to-end
+
+```
+Generate:
+├─ 3k single pieces
+├─ 3k multiple clean
+└─ 4k piles
+
+Test:
+├─ Annotation quality
+├─ Visual inspection
+├─ Converter scripts (to Florence-2/Grounding-DINO formats)
+└─ Train tiny model to validate data works
+```
+
+### 3. Initial Model Training
+
+**After 10k dataset ready:**
+- Convert to Grounding-DINO format
+- Train for 5-10 epochs (quick test)
+- Validate on real LEGO pile photos
+- Measure synthetic→real gap
+- Iterate on data quality
+
+---
+
+## Success Criteria - Phase 1
+
+**Data Quality:**
+- [ ] All bboxes within image bounds
+- [ ] No invalid/corrupt annotations
+- [ ] Visibility calculations accurate (spot check)
+- [ ] Caption variety (multiple styles per object)
+
+**Pipeline Performance:**
+- [ ] Generate 10k images in <1 week (single machine)
+- [ ] <5% generation failures
+- [ ] Consistent quality across scene types
+
+**Model Validation:**
+- [ ] Grounding-DINO trains successfully on generated data
+- [ ] >60% accuracy on synthetic test set
+- [ ] Model can detect pieces in real photos (even if accuracy low)
+
+---
+
+## Future Phases (Post-Data Generation)
+
+### Phase 2: Model Training & Comparison
+- Train Grounding-DINO on full dataset
+- Train Florence-2 on same dataset
+- Comparative evaluation
+- Hyperparameter tuning
+
+### Phase 3: Deployment
+- FastAPI inference server on Linux
+- iPad ARKit client app
+- WebSocket streaming
+- Real-time AR overlay
+
+### Phase 4: Research & Publication
+- MSc thesis write-up
+- Conference paper submission
+- Open-source release
+- Dataset publication
+
+---
+
+## Key Resources
+
+**Models:**
+- Grounding-DINO: https://github.com/IDEA-Research/GroundingDINO
+- Florence-2: https://huggingface.co/microsoft/Florence-2-large
+
+**Data:**
+- LDraw Parts: https://www.ldraw.org/
+- Rebrickable API: https://rebrickable.com/api/
+- HDRIs: https://polyhaven.com/hdris
+
+**Hardware:**
+- Linux Workstation: RTX 3090 (24GB)
+- Client Device: iPad Air 5th Gen (M1)
+
+**Repository:**
+- GitHub: https://github.com/visioneerlabs/brickscope
+
+---
+
+## Notes & Decisions Log
+
+**2026-01-03:**
+- ✅ Decided on Grounding-DINO as primary model (vs Florence-2)
+- ✅ Chose 3090-centric architecture (no on-device inference)
+- ✅ Rich intermediate JSON format (convert to model formats later)
+- ✅ Three scene types: single/multiple/piles (30/30/40 distribution)
+- ✅ Start with 10k validation set before scaling to 1M
+- ✅ No Facebook/Meta products (ruled out Quest headsets)
+- ✅ Focus on Linux + iPad ecosystem
+- ✅ Project name: BrickScope (better than BrickFinder)
+- ✅ Repository: visioneerlabs/brickscope
+
+**Key Insight:** Grounded detection (text-based filtering) is killer feature for this use case - don't need to detect all 150 pieces, just the 10-50 user actually needs. The "-scope" metaphor perfectly captures the AR viewing/filtering experience.
+
+---
+
+## Questions for Claude Code Session
+
+1. Best approach for LDraw → Blender import (existing addon vs custom)?
+2. Optimal Blender scene structure for parallel rendering?
+3. Physics simulation vs manual placement for piles?
+4. Segmentation mask generation worth the complexity?
+5. HDRI licensing for commercial use?
+
+---
+
+**End of Brief - Ready for VS Code + Claude Code Implementation** 🔍🧱
+
+**Repository:** `github.com/visioneerlabs/brickscope`  
+**License:** Apache 2.0  
+**Status:** Phase 1 - Blender Addon Development
