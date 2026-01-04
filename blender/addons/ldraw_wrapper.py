@@ -94,6 +94,9 @@ class LDrawImporter:
                 temp_ldr_path = temp_file.name
 
             try:
+                # Deselect all objects before import
+                bpy.ops.object.select_all(action='DESELECT')
+
                 # Call the import operator with the temp .ldr file
                 bpy.ops.import_scene.importldr(
                     filepath=temp_ldr_path,
@@ -105,12 +108,21 @@ class LDrawImporter:
                     scene_scale=0.01
                 )
 
-                # Get the imported object (should be the last selected)
-                obj = bpy.context.selected_objects[-1] if bpy.context.selected_objects else None
+                # Get the imported objects - find the top-level parent (empty with no parent)
+                imported_objects = bpy.context.selected_objects
+                obj = None
+                for o in imported_objects:
+                    if o.parent is None:
+                        obj = o
+                        break
+
+                # Fallback to last selected if no parent-less object found
+                if obj is None and imported_objects:
+                    obj = imported_objects[-1]
 
                 if obj:
                     obj.name = f"part_{part_id}_color{color_id}"
-                    print(f"Successfully imported part {part_id} with color {color_id}")
+                    print(f"Successfully imported part {part_id} with color {color_id} at location {obj.location}")
 
                 return obj
 

@@ -200,7 +200,7 @@ class BRICKSCOPE_OT_bake_distribution(Operator):
 
         # Calculate grid layout
         grid_cols = math.ceil(math.sqrt(len(pairs)))
-        grid_spacing = 0.5  # Distance between parts (in Blender units, increased for visibility)
+        grid_spacing = 2.0  # Distance between parts (in Blender units, 2.0 = very visible spacing)
 
         for idx, (part_id, color_id) in enumerate(pairs):
             # Report progress every 10 parts
@@ -219,11 +219,13 @@ class BRICKSCOPE_OT_bake_distribution(Operator):
                 offset_x = -(grid_cols * grid_spacing) / 2
                 offset_y = -((len(pairs) // grid_cols) * grid_spacing) / 2
 
-                obj.location = (
+                new_location = (
                     grid_x + offset_x,
                     grid_y + offset_y,
                     random.uniform(0, 0.1)  # Slight Z variation
                 )
+                obj.location = new_location
+                print(f"Part {idx}: {obj.name} positioned at {new_location}, actual location: {obj.location}")
 
                 # Random rotation for variety
                 obj.rotation_euler = (
