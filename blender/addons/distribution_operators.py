@@ -252,9 +252,12 @@ class BRICKSCOPE_OT_bake_distribution(Operator):
                 # Find all mesh children
                 for child in parent_obj.children:
                     if child.type == 'MESH':
-                        # Unparent and keep world transform
+                        # Store world transform before unparenting
+                        world_matrix = child.matrix_world.copy()
+                        # Unparent
                         child.parent = None
-                        child.matrix_parent_inverse.identity()
+                        # Restore world transform (preserves location, rotation, AND scale)
+                        child.matrix_world = world_matrix
                         mesh_objects.append(child)
 
                 # Mark empty for deletion
