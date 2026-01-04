@@ -10,7 +10,7 @@
 
 ---
 
-![blender_legos](docs/images/random_lego_grid_header.png)
+![lego pile](docs/images/lego_pile.png)
 
 ## What is BrickScope?
 
