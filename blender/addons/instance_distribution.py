@@ -97,20 +97,20 @@ class BRICKSCOPE_OT_generate_instance_distribution(Operator):
             # Import parts (they stay visible in the reference collection)
             obj = importer.import_part(part_id, color_id_int, location=(0, 0, 0))
             if obj:
-                # Move to reference collection
-                for col in obj.users_collection:
-                    col.objects.unlink(obj)
-                ref_collection.objects.link(obj)
-                obj.name = f"geonode_ref_{part_id}_color{color_id_int}"
-
-                # Ensure parent and ALL children are visible in viewport
-                obj.hide_viewport = False
-                obj.hide_render = False
+                # Find the actual MESH object (child), not the empty parent
+                mesh_obj = None
                 for child in obj.children_recursive:
-                    child.hide_viewport = False
-                    child.hide_render = False
+                    if child.type == 'MESH':
+                        mesh_obj = child
+                        break
 
-                combo_to_object[(part_id, color_id)] = obj
+                if mesh_obj:
+                    # Use the mesh object directly for geometry nodes
+                    mesh_obj.hide_viewport = False
+                    mesh_obj.hide_render = False
+                    combo_to_object[(part_id, color_id)] = mesh_obj
+                else:
+                    self.report({'WARNING'}, f"No mesh found for {part_id} color {color_id_int}")
             else:
                 self.report({'WARNING'}, f"Failed to import {part_id} color {color_id_int}")
 
