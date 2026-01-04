@@ -74,27 +74,14 @@ class BRICKSCOPE_OT_generate_instance_distribution(Operator):
             return {'CANCELLED'}
 
         # Import all unique part+color combinations
-        # For geometry nodes, we need visible reference objects (not hidden cache)
         unique_combos = list(set(pairs))
         self.report({'INFO'}, f"Importing {len(unique_combos)} unique part+color combinations...")
-
-        # Create a collection for geometry node reference objects (VISIBLE)
-        ref_collection_name = "BrickScope_GeoNodeReferences"
-        if ref_collection_name in bpy.data.collections:
-            ref_collection = bpy.data.collections[ref_collection_name]
-            # Clear existing objects
-            for obj in list(ref_collection.objects):
-                bpy.data.objects.remove(obj, do_unlink=True)
-        else:
-            ref_collection = bpy.data.collections.new(ref_collection_name)
-            context.scene.collection.children.link(ref_collection)
-            # Keep collection visible (don't hide!)
 
         combo_to_object = {}
         for part_id, color_id in unique_combos:
             color_id_int = int(color_id)
 
-            # Import parts (they stay visible in the reference collection)
+            # Import parts (they stay wherever the importer puts them)
             obj = importer.import_part(part_id, color_id_int, location=(0, 0, 0))
             if obj:
                 # Find the actual MESH object (child), not the empty parent
