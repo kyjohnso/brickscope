@@ -116,7 +116,23 @@ class BRICKSCOPE_PT_distribution_panel(bpy.types.Panel):
 
         # Actions
         layout.separator()
-        col = layout.column(align=True)
-        col.scale_y = 1.5
+
+        # Generation
+        box = layout.box()
+        box.label(text="Generation", icon='SHADERFX')
+        col = box.column(align=True)
+        col.scale_y = 1.3
         col.operator("brickscope.generate_instance_distribution", icon='PARTICLES', text="Generate Instances")
         col.operator("brickscope.bake_distribution", icon='MESH_DATA', text="Bake to Real Objects")
+
+        # Physics
+        layout.separator()
+        box = layout.box()
+        box.label(text="Physics Simulation", icon='PHYSICS')
+        col = box.column(align=True)
+        col.scale_y = 1.3
+        col.operator("brickscope.setup_physics", icon='RIGID_BODY', text="Setup Physics")
+
+        row = box.row(align=True)
+        row.operator("brickscope.bake_physics", icon='REC', text="Bake")
+        row.operator("brickscope.clear_physics", icon='X', text="Clear")
