@@ -103,6 +103,13 @@ class BRICKSCOPE_OT_generate_instance_distribution(Operator):
                 ref_collection.objects.link(obj)
                 obj.name = f"geonode_ref_{part_id}_color{color_id_int}"
 
+                # Ensure parent and ALL children are visible in viewport
+                obj.hide_viewport = False
+                obj.hide_render = False
+                for child in obj.children_recursive:
+                    child.hide_viewport = False
+                    child.hide_render = False
+
                 combo_to_object[(part_id, color_id)] = obj
             else:
                 self.report({'WARNING'}, f"Failed to import {part_id} color {color_id_int}")
