@@ -10,6 +10,8 @@
 
 ---
 
+![blender_legos](docs/images/random_lego_grid_header.png)
+
 ## What is BrickScope?
 
 BrickScope uses computer vision and grounded object detection to help you find specific LEGO pieces in massive piles. Point your device at a pile of 150+ pieces, tell it what you need (e.g., "red 2x4 brick from Black Seas Barracuda"), and BrickScope highlights only those pieces.
