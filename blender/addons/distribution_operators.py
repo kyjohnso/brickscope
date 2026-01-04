@@ -136,23 +136,100 @@ class BRICKSCOPE_OT_generate_preview(Operator):
 
 
 class BRICKSCOPE_OT_bake_distribution(Operator):
-    """Bake geometry node instances to real objects"""
+    """Import LEGO parts based on distribution weights"""
     bl_idname = "brickscope.bake_distribution"
-    bl_label = "Bake to Objects"
+    bl_label = "Bake Distribution"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        import random
+        import math
+        from .distribution_manager import DistributionConfig, WeightedDistribution, DistributionItem
+        from .ldraw_wrapper import LDrawImporter
+        from .part_cache import get_part_cache
+        from .brickscope_preferences import get_preferences
+
         props = context.scene.brickscope_distribution
+        prefs = get_preferences(context)
 
-        # TODO: Implement baking
-        # For now, just report the distribution stats
+        # Validate
+        if len(props.parts) == 0:
+            self.report({'ERROR'}, "No parts in distribution. Click 'Load Defaults' first.")
+            return {'CANCELLED'}
 
-        total_part_weight = sum(p.weight for p in props.parts)
-        total_color_weight = sum(c.weight for c in props.colors)
+        if len(props.colors) == 0:
+            self.report({'ERROR'}, "No colors in distribution. Click 'Load Defaults' first.")
+            return {'CANCELLED'}
 
+        if not prefs.ldraw_library_path:
+            self.report({'ERROR'}, "LDraw library path not set")
+            return {'CANCELLED'}
+
+        # Convert Blender properties to DistributionConfig
+        part_dist = WeightedDistribution()
+        for item in props.parts:
+            part_dist.items.append(DistributionItem(item.part_id, item.part_name, item.weight))
+
+        color_dist = WeightedDistribution()
+        for item in props.colors:
+            color_dist.items.append(DistributionItem(item.color_id, item.color_name, item.weight))
+
+        config = DistributionConfig(
+            part_distribution=part_dist,
+            color_distribution=color_dist,
+            total_pieces=props.total_pieces,
+            seed=props.random_seed if props.random_seed > 0 else None
+        )
+
+        # Sample distribution
+        self.report({'INFO'}, f"Sampling distribution for {props.total_pieces} pieces...")
+        pairs = config.generate_part_color_pairs()
+
+        # Initialize importer and cache
+        importer = LDrawImporter(prefs.ldraw_library_path)
+        cache = get_part_cache()
+
+        if not importer.has_ldr_tools:
+            self.report({'ERROR'}, "ldr_tools_blender not found. Install from github.com/ScanMountGoat/ldr_tools_blender")
+            return {'CANCELLED'}
+
+        # Import parts (with progress)
+        self.report({'INFO'}, f"Importing {len(pairs)} parts...")
+
+        imported_objects = []
+        scatter_radius = 2.0  # Parts scattered within this radius
+        height_offset = 3.0   # Start height for parts
+
+        for idx, (part_id, color_id) in enumerate(pairs):
+            # Report progress every 10 parts
+            if idx % 10 == 0:
+                self.report({'INFO'}, f"Importing part {idx+1}/{len(pairs)}...")
+
+            # Import part (uses cache automatically)
+            obj = importer.import_part(part_id, int(color_id))
+
+            if obj:
+                # Scatter placement (random position and rotation)
+                obj.location = (
+                    random.uniform(-scatter_radius, scatter_radius),
+                    random.uniform(-scatter_radius, scatter_radius),
+                    height_offset + random.uniform(0, 2.0)
+                )
+
+                obj.rotation_euler = (
+                    random.uniform(0, math.pi * 2),
+                    random.uniform(0, math.pi * 2),
+                    random.uniform(0, math.pi * 2)
+                )
+
+                imported_objects.append(obj)
+
+        # Report results
+        cache_stats = cache.get_stats()
         self.report({'INFO'},
-                   f"Will generate {props.total_pieces} pieces: "
-                   f"{len(props.parts)} part types (total weight: {total_part_weight:.2f}), "
-                   f"{len(props.colors)} colors (total weight: {total_color_weight:.2f})")
+                   f"Successfully imported {len(imported_objects)} parts! "
+                   f"Cache: {cache_stats['cached_parts']} unique parts, "
+                   f"{cache_stats['unique_part_ids']} part IDs, "
+                   f"{cache_stats['unique_colors']} colors")
 
         return {'FINISHED'}
