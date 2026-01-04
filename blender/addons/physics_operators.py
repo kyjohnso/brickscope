@@ -21,7 +21,7 @@ class BRICKSCOPE_OT_setup_physics(Operator):
     bounciness: bpy.props.FloatProperty(
         name="Bounciness",
         description="How bouncy the bricks are (0 = no bounce, 1 = perfectly elastic)",
-        default=0.4,
+        default=0.1,  # Low bounce - LEGO is plastic, not rubber
         min=0.0,
         max=1.0
     )
@@ -29,7 +29,7 @@ class BRICKSCOPE_OT_setup_physics(Operator):
     friction: bpy.props.FloatProperty(
         name="Friction",
         description="Surface friction (0 = slippery, 1 = sticky)",
-        default=0.5,
+        default=0.6,  # Higher friction for plastic
         min=0.0,
         max=1.0
     )
@@ -37,7 +37,7 @@ class BRICKSCOPE_OT_setup_physics(Operator):
     mass: bpy.props.FloatProperty(
         name="Mass",
         description="Mass of each brick in kg",
-        default=0.01,
+        default=0.005,  # Very light - small LEGO pieces are ~5g
         min=0.001,
         max=10.0
     )
@@ -147,9 +147,9 @@ class BRICKSCOPE_OT_setup_physics(Operator):
         rb.friction = self.friction
         rb.restitution = self.bounciness
 
-        # Damping - lower values for small objects
-        rb.linear_damping = 0.04
-        rb.angular_damping = 0.1
+        # Damping - very low values for realistic motion
+        rb.linear_damping = 0.01  # Almost no linear drag
+        rb.angular_damping = 0.01  # Almost no rotational drag - let them spin!
 
         # Collision margins
         rb.use_margin = True
