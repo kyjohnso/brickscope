@@ -15,7 +15,7 @@ class BRICKSCOPE_OT_setup_physics(Operator):
     use_mesh_collision: bpy.props.BoolProperty(
         name="Use Mesh Collision",
         description="Use accurate mesh collision (slower but more accurate for complex shapes)",
-        default=True
+        default=False  # Default to convex hull for stability
     )
 
     bounciness: bpy.props.FloatProperty(
@@ -101,7 +101,7 @@ class BRICKSCOPE_OT_setup_physics(Operator):
             bpy.ops.rigidbody.object_add()
 
             plane.rigid_body.type = 'PASSIVE'
-            plane.rigid_body.collision_shape = 'MESH'
+            plane.rigid_body.collision_shape = 'BOX'  # Simple box for ground plane
             plane.rigid_body.friction = self.friction
             plane.rigid_body.restitution = self.bounciness
 
