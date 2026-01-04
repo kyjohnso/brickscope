@@ -44,19 +44,22 @@ class BRICKSCOPE_OT_setup_physics(Operator):
 
     def execute(self, context):
         # Get selected objects or all objects in BrickScope_Instances collection
+        # IMPORTANT: Only add rigid body to MESH objects, not empties
         target_objects = []
 
         if context.selected_objects:
-            target_objects = [obj for obj in context.selected_objects if obj.type in ('MESH', 'EMPTY')]
+            target_objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
         else:
             # Try to find BrickScope_Instances collection
             if "BrickScope_Instances" in bpy.data.collections:
                 collection = bpy.data.collections["BrickScope_Instances"]
-                target_objects = [obj for obj in collection.all_objects if obj.type in ('MESH', 'EMPTY')]
+                target_objects = [obj for obj in collection.all_objects if obj.type == 'MESH']
 
         if not target_objects:
-            self.report({'ERROR'}, "No objects found. Select objects or use baked distribution.")
+            self.report({'ERROR'}, "No mesh objects found. Select mesh objects or use baked distribution.")
             return {'CANCELLED'}
+
+        self.report({'INFO'}, f"Found {len(target_objects)} mesh objects to add physics to...")
 
         # Create ground plane if it doesn't exist
         ground_plane = self._setup_ground_plane(context)
@@ -85,6 +88,10 @@ class BRICKSCOPE_OT_setup_physics(Operator):
             plane.name = plane_name
             print(f"Created ground plane: {plane_name}")
 
+        # Ensure rigid body world exists
+        if context.scene.rigidbody_world is None:
+            bpy.ops.rigidbody.world_add()
+
         # Add passive rigid body if not already present
         if plane.rigid_body is None:
             # Deselect all and select only the plane
@@ -102,17 +109,29 @@ class BRICKSCOPE_OT_setup_physics(Operator):
 
     def _setup_rigid_body(self, obj):
         """Setup rigid body physics on an object"""
+        # Get or create rigid body world
+        if bpy.context.scene.rigidbody_world is None:
+            bpy.ops.rigidbody.world_add()
+
         # Add rigid body if not already present
         if obj.rigid_body is None:
-            # Deselect all and select only this object
-            bpy.ops.object.select_all(action='DESELECT')
-            obj.select_set(True)
-            bpy.context.view_layer.objects.active = obj
-            bpy.ops.rigidbody.object_add()
+            # Try using the operator with proper context
+            try:
+                bpy.ops.object.select_all(action='DESELECT')
+                obj.select_set(True)
+                bpy.context.view_layer.objects.active = obj
+                bpy.ops.rigidbody.object_add()
+            except RuntimeError as e:
+                print(f"Failed to add rigid body via operator: {e}")
+                # Fallback: manually add rigid body constraint collection
+                if bpy.context.scene.rigidbody_world:
+                    bpy.context.scene.rigidbody_world.collection.objects.link(obj)
+                return False
 
         # Configure rigid body settings optimized for LEGO parts
         rb = obj.rigid_body
         if rb is None:
+            print(f"Warning: rigid body not created for {obj.name}")
             return False
 
         rb.type = 'ACTIVE'
