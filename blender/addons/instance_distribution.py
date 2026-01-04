@@ -78,7 +78,7 @@ class BRICKSCOPE_OT_generate_instance_distribution(Operator):
         unique_combos = list(set(pairs))
         self.report({'INFO'}, f"Importing {len(unique_combos)} unique part+color combinations...")
 
-        # Create a collection for geometry node reference objects
+        # Create a collection for geometry node reference objects (VISIBLE)
         ref_collection_name = "BrickScope_GeoNodeReferences"
         if ref_collection_name in bpy.data.collections:
             ref_collection = bpy.data.collections[ref_collection_name]
@@ -88,17 +88,16 @@ class BRICKSCOPE_OT_generate_instance_distribution(Operator):
         else:
             ref_collection = bpy.data.collections.new(ref_collection_name)
             context.scene.collection.children.link(ref_collection)
-            # Hide collection in viewport outliner (but keep enabled for geometry nodes)
-            ref_collection.hide_viewport = True
+            # Keep collection visible (don't hide!)
 
         combo_to_object = {}
         for part_id, color_id in unique_combos:
             color_id_int = int(color_id)
 
-            # Always import fresh for geometry nodes (don't use cache)
+            # Import parts (they stay visible in the reference collection)
             obj = importer.import_part(part_id, color_id_int, location=(0, 0, 0))
             if obj:
-                # Move to reference collection (visible, but separate)
+                # Move to reference collection
                 for col in obj.users_collection:
                     col.objects.unlink(obj)
                 ref_collection.objects.link(obj)
