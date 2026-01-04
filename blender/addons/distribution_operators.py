@@ -207,34 +207,51 @@ class BRICKSCOPE_OT_bake_distribution(Operator):
             if idx % 10 == 0:
                 self.report({'INFO'}, f"Importing part {idx+1}/{len(pairs)}...")
 
-            # Import part (uses cache automatically)
-            obj = importer.import_part(part_id, int(color_id))
+            color_id_int = int(color_id)
 
-            if obj:
-                # Grid placement (centered at origin)
-                grid_x = (idx % grid_cols) * grid_spacing
-                grid_y = (idx // grid_cols) * grid_spacing
+            # Check if part+color is already cached
+            if not cache.has_part(part_id, color_id_int):
+                # Import and add to cache (first occurrence)
+                obj = importer.import_part(part_id, color_id_int)
+                if obj:
+                    cache.add_part(part_id, color_id_int, obj)
+                    print(f"Cached new part: {part_id} color {color_id_int}")
+                else:
+                    print(f"Failed to import part: {part_id} color {color_id_int}")
+                    continue
 
-                # Center the grid
-                offset_x = -(grid_cols * grid_spacing) / 2
-                offset_y = -((len(pairs) // grid_cols) * grid_spacing) / 2
+            # Calculate position for this instance
+            grid_x = (idx % grid_cols) * grid_spacing
+            grid_y = (idx // grid_cols) * grid_spacing
 
-                new_location = (
-                    grid_x + offset_x,
-                    grid_y + offset_y,
-                    random.uniform(0, 0.1)  # Slight Z variation
-                )
-                obj.location = new_location
-                print(f"Part {idx}: {obj.name} positioned at {new_location}, actual location: {obj.location}")
+            # Center the grid
+            offset_x = -(grid_cols * grid_spacing) / 2
+            offset_y = -((len(pairs) // grid_cols) * grid_spacing) / 2
 
-                # Random rotation for variety
-                obj.rotation_euler = (
-                    random.uniform(0, math.pi * 2),
-                    random.uniform(0, math.pi * 2),
-                    random.uniform(0, math.pi * 2)
-                )
+            new_location = (
+                grid_x + offset_x,
+                grid_y + offset_y,
+                random.uniform(0, 0.1)  # Slight Z variation
+            )
 
-                imported_objects.append(obj)
+            # Random rotation for variety
+            new_rotation = (
+                random.uniform(0, math.pi * 2),
+                random.uniform(0, math.pi * 2),
+                random.uniform(0, math.pi * 2)
+            )
+
+            # Create instance at desired location
+            instance = cache.create_instance(
+                part_id,
+                color_id_int,
+                location=new_location,
+                rotation=new_rotation
+            )
+
+            if instance:
+                print(f"Part {idx}: {instance.name} positioned at {new_location}, actual: {instance.location}")
+                imported_objects.append(instance)
 
         # Report results
         cache_stats = cache.get_stats()

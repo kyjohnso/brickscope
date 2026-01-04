@@ -107,18 +107,38 @@ class PartCache:
 
         cached_obj = self.get_part(part_id, color_id)
 
-        # Create linked duplicate (shares mesh data)
-        instance = cached_obj.copy()
-        instance.data = cached_obj.data  # Share mesh data
-
-        # Set transform
-        instance.location = location
-        instance.rotation_euler = rotation
-
-        # Add to scene collection
+        # Determine target collection
         if collection is None:
             collection = bpy.context.scene.collection
-        collection.objects.link(instance)
+
+        # Recursively duplicate object and all children
+        def duplicate_hierarchy(obj, parent=None):
+            """Recursively duplicate an object and its children"""
+            # Copy the object
+            new_obj = obj.copy()
+            if obj.data:
+                new_obj.data = obj.data  # Share mesh data (linked duplicate)
+
+            # Link to collection
+            collection.objects.link(new_obj)
+
+            # Set parent relationship
+            if parent:
+                new_obj.parent = parent
+                new_obj.matrix_parent_inverse = obj.matrix_parent_inverse.copy()
+
+            # Recursively copy children
+            for child in obj.children:
+                duplicate_hierarchy(child, new_obj)
+
+            return new_obj
+
+        # Create instance with full hierarchy
+        instance = duplicate_hierarchy(cached_obj)
+
+        # Set transform on root object
+        instance.location = location
+        instance.rotation_euler = rotation
 
         # Generate unique name
         instance.name = f"{part_id}_color{color_id}_instance"
