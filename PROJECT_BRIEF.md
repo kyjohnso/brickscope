@@ -665,6 +665,321 @@ Phase 3: Bake (Import Real Parts - For Rendering)
 
 ---
 
+## Headless/Server Usage for Production
+
+**Critical Design:** All core functionality (distribution → simulation → rendering) runs in Blender headless mode for large-scale dataset generation.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Pure Python (Optional - Config Generation Only)    │
+│  - Create distribution configs (no Blender needed)  │
+│  - Sample distributions to preview counts           │
+│  - Generate batch job configs                       │
+└──────────────────┬──────────────────────────────────┘
+                   │ JSON configs
+                   ↓
+┌─────────────────────────────────────────────────────┐
+│  Blender Headless (Full Pipeline)                   │
+│  1. Load distribution config                        │
+│  2. Sample → (part_id, color_id) pairs              │
+│  3. Import LEGO parts (ldr_tools_blender)           │
+│  4. Scatter parts in scene                          │
+│  5. Physics simulation (rigid body pile)            │
+│  6. Randomize camera/lighting                       │
+│  7. Render image (Cycles)                           │
+│  8. Calculate bboxes/visibility                     │
+│  9. Export annotations (JSON)                       │
+│  10. Clear scene → repeat                           │
+└─────────────────────────────────────────────────────┘
+```
+
+### What Each Mode Can Do
+
+**Pure Python (No Blender Required):**
+- ✅ Create/edit distribution configs
+- ✅ Sample distributions (get part/color lists)
+- ✅ Save/load JSON configs
+- ✅ Validate distributions
+- ❌ Cannot import parts (needs Blender)
+- ❌ Cannot simulate physics (needs Blender)
+- ❌ Cannot render (needs Blender Cycles)
+
+**Blender Headless (`--background` flag):**
+- ✅ **Everything** - Full pipeline end-to-end
+- ✅ Load distribution configs
+- ✅ Import LEGO parts with materials
+- ✅ Physics simulation for piles
+- ✅ Photorealistic rendering
+- ✅ Annotation generation (bboxes, visibility)
+- ✅ No GUI overhead (faster, scalable)
+
+**Blender Interactive (UI):**
+- ✅ Same as headless + visual feedback
+- Use for: Development, prototyping, debugging
+
+### Production Workflow
+
+**Step 1: Create Distribution Configs (Optional - Can skip to Step 2)**
+
+```python
+# create_configs.py - Pure Python, no Blender needed
+from distribution_manager import DistributionConfig, WeightedDistribution
+
+# Create distribution
+config = DistributionConfig()
+config.part_distribution.add_item("3001", "Brick 2x4", 1.0)
+config.part_distribution.add_item("3003", "Brick 2x2", 0.9)
+config.color_distribution.add_item("4", "Red", 1.0)
+config.color_distribution.add_item("1", "Blue", 0.5)
+config.total_pieces = 100
+config.seed = 12345
+
+# Save for batch processing
+config.save("configs/pile_config_001.json")
+
+# Create 100 configs with different seeds
+for i in range(100):
+    config.seed = 1000 + i
+    config.save(f"configs/batch_001/config_{i:03d}.json")
+```
+
+**Step 2: Generate Dataset (Blender Headless)**
+
+```bash
+# Single scene generation
+blender --background --python generate_scene.py -- \
+    --config configs/pile_config_001.json \
+    --output data/piles/scene_001 \
+    --scene-type pile
+
+# Batch generation (1000 scenes)
+for config in configs/batch_001/*.json; do
+    blender --background --python generate_scene.py -- \
+        --config $config \
+        --output data/piles/batch_001
+done
+
+# Parallel generation (10 workers)
+ls configs/batch_001/*.json | \
+    parallel -j 10 blender --background --python generate_scene.py -- \
+        --config {} \
+        --output data/piles/batch_001
+```
+
+**Step 3: Blender Headless Script**
+
+```python
+# generate_scene.py - Full pipeline in headless Blender
+import bpy
+import sys
+import json
+from pathlib import Path
+
+# Parse arguments
+args = sys.argv[sys.argv.index("--") + 1:]
+config_path = args[args.index("--config") + 1]
+output_dir = Path(args[args.index("--output") + 1])
+scene_type = args[args.index("--scene-type") + 1] if "--scene-type" in args else "pile"
+
+# Import BrickScope modules (addon must be installed/available)
+from distribution_manager import DistributionConfig
+from ldraw_wrapper import LDrawImporter
+from part_cache import get_part_cache
+# from scene_generator import generate_pile_scene  # TODO
+# from annotation_exporter import export_annotations  # TODO
+
+# Load distribution config
+config = DistributionConfig.load(config_path)
+print(f"Loaded config: {len(config.part_distribution.items)} parts, "
+      f"{len(config.color_distribution.items)} colors, "
+      f"{config.total_pieces} total pieces")
+
+# Sample distribution
+pairs = config.generate_part_color_pairs()
+print(f"Generated {len(pairs)} part/color pairs")
+
+# Initialize importers
+ldraw_path = "/path/to/ldraw"  # From addon preferences
+importer = LDrawImporter(ldraw_path)
+cache = get_part_cache()
+
+# Import parts (with caching)
+objects = []
+for part_id, color_id in pairs:
+    # Check cache first
+    if not cache.has_part(part_id, int(color_id)):
+        # Import and cache
+        obj = importer.import_part(part_id, int(color_id))
+        if obj:
+            cache.add_part(part_id, int(color_id), obj)
+
+    # Create instance from cache
+    instance = cache.create_instance(
+        part_id,
+        int(color_id),
+        location=(random.uniform(-1, 1), random.uniform(-1, 1), random.uniform(0, 2)),
+        rotation=(random.uniform(0, 6.28), random.uniform(0, 6.28), random.uniform(0, 6.28))
+    )
+    objects.append(instance)
+
+print(f"Imported {len(objects)} objects, cache has {cache.get_stats()['cached_parts']} unique parts")
+
+# Physics simulation (pile creation)
+if scene_type == "pile":
+    # Enable rigid body physics
+    for obj in objects:
+        bpy.ops.rigidbody.object_add({'object': obj})
+        obj.rigid_body.type = 'ACTIVE'
+
+    # Add ground plane
+    bpy.ops.mesh.primitive_plane_add(size=10, location=(0, 0, 0))
+    ground = bpy.context.active_object
+    bpy.ops.rigidbody.object_add({'object': ground})
+    ground.rigid_body.type = 'PASSIVE'
+
+    # Simulate (240 frames = 10 seconds at 24fps)
+    bpy.context.scene.frame_end = 240
+    bpy.context.scene.frame_set(240)
+    print("Physics simulation complete")
+
+# Randomize camera and lighting
+# TODO: Implement camera/lighting randomization
+
+# Render
+output_dir.mkdir(parents=True, exist_ok=True)
+image_path = output_dir / f"image_{config.seed:06d}.png"
+bpy.context.scene.render.filepath = str(image_path)
+bpy.context.scene.render.image_settings.file_format = 'PNG'
+bpy.ops.render.render(write_still=True)
+print(f"Rendered: {image_path}")
+
+# Export annotations
+# TODO: Calculate bboxes, visibility, export JSON
+annotation_path = output_dir / f"annotation_{config.seed:06d}.json"
+# export_annotations(objects, annotation_path)
+
+print("Scene generation complete")
+```
+
+### Docker Container for Scale
+
+```dockerfile
+# Dockerfile
+FROM ubuntu:22.04
+
+# Install Blender
+RUN apt-get update && apt-get install -y \
+    blender \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies
+RUN pip3 install numpy
+
+# Copy BrickScope addon
+COPY blender/addons /opt/brickscope/addons
+
+# Copy scripts
+COPY scripts /opt/brickscope/scripts
+
+# Copy LDraw library
+COPY ldraw /opt/ldraw
+
+# Install BrickScope addon
+RUN blender --background --python /opt/brickscope/scripts/install_addon.py
+
+WORKDIR /workspace
+
+ENTRYPOINT ["blender", "--background", "--python", "/opt/brickscope/scripts/generate_scene.py"]
+```
+
+```bash
+# Build container
+docker build -t brickscope:latest .
+
+# Run single job
+docker run -v $(pwd)/configs:/configs \
+           -v $(pwd)/output:/output \
+           brickscope:latest -- \
+           --config /configs/pile_001.json \
+           --output /output/batch_001
+
+# Scale with Kubernetes / AWS Batch / GCP Batch
+# Run 1000 containers in parallel for 1M images
+```
+
+### Cloud Deployment Examples
+
+**AWS Batch:**
+```bash
+# Submit 1000 batch jobs
+for i in {0..999}; do
+    aws batch submit-job \
+        --job-name brickscope-batch-$i \
+        --job-queue brickscope-queue \
+        --job-definition brickscope-job \
+        --parameters config=s3://bucket/configs/config_$i.json
+done
+```
+
+**Render Farm:**
+```bash
+# Many render farms support Blender headless
+# Submit to Deadline, Royal Render, etc.
+```
+
+### Performance Considerations
+
+**Single Machine:**
+- 1 Blender instance: ~60 sec/pile image (with physics)
+- 10 parallel instances: 10x throughput
+- Limit: CPU cores, GPU memory
+
+**Multi-Machine:**
+- Stateless design = perfect for horizontal scaling
+- 100 machines × 10 instances = 1000x throughput
+- 1M images possible in days, not months
+
+**Optimization Tips:**
+- Use GPU rendering (Cycles OptiX/HIP)
+- Cache parts aggressively (import once per batch)
+- Lower samples for validation sets (64 vs 128)
+- Use geometry nodes preview mode for development
+
+### Reproducibility
+
+**Every generated scene includes:**
+```json
+{
+  "image_path": "pile_012345.png",
+  "distribution_config": { ... },  // Exact config used
+  "random_seed": 12345,            // Reproducible
+  "render_settings": { ... },
+  "timestamp": "2026-01-03T20:00:00Z"
+}
+```
+
+**Benefits:**
+- Can regenerate exact same scene
+- Debug specific failure cases
+- Ablation studies (vary one parameter)
+- Version control for datasets
+
+### Summary: Modes & Use Cases
+
+| Mode | Use Case | Can Do |
+|------|----------|--------|
+| **Pure Python** | Config generation | Distributions only |
+| **Blender UI** | Development, debugging | Full pipeline + visual feedback |
+| **Blender Headless** | Production dataset generation | Full pipeline, scalable |
+| **Docker/Cloud** | Massive scale (1M+ images) | Parallel headless Blender |
+
+**Critical Point:** The UI is for *defining* distributions visually, but production dataset generation runs the exact same code in Blender headless mode. No functionality is lost.
+
+---
+
 ## Render Performance Calculations
 
 ### Computational Requirements
