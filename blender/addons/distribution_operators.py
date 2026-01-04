@@ -208,6 +208,10 @@ class BRICKSCOPE_OT_bake_distribution(Operator):
         print(f"Part ID mapping: {part_id_to_x}")
         print(f"Color ID mapping: {color_id_to_y}")
 
+        # Track count of each (part_id, color_id) combination for Z stacking
+        part_color_count = {}
+        z_spacing = 0.5  # Blender units between stacked parts
+
         for idx, (part_id, color_id) in enumerate(pairs):
             # Report progress every 10 parts
             if idx % 10 == 0:
@@ -215,12 +219,19 @@ class BRICKSCOPE_OT_bake_distribution(Operator):
 
             color_id_int = int(color_id)
 
-            # Calculate position based on part type (X) and color (Y)
+            # Track how many times we've seen this part+color combination
+            combo_key = (part_id, color_id)
+            if combo_key not in part_color_count:
+                part_color_count[combo_key] = 0
+            else:
+                part_color_count[combo_key] += 1
+
+            # Calculate position based on part type (X), color (Y), and repetition (Z)
             x_pos = part_id_to_x[part_id] * 1.0  # 1 Blender unit per part type
             y_pos = color_id_to_y[color_id] * 1.0  # 1 Blender unit per color
-            z_pos = 0.0
+            z_pos = part_color_count[combo_key] * z_spacing  # Stack duplicates in Z
 
-            print(f"=== IMPORTING Part {idx}: {part_id} color {color_id} -> target position X={x_pos}, Y={y_pos} ===")
+            print(f"=== IMPORTING Part {idx}: {part_id} color {color_id} (instance #{part_color_count[combo_key]}) -> X={x_pos}, Y={y_pos}, Z={z_pos} ===")
 
             # Import part and translate it during import
             obj = importer.import_part(part_id, color_id_int, location=(x_pos, y_pos, z_pos))
