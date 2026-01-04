@@ -165,6 +165,14 @@ class BRICKSCOPE_OT_generate_instance_distribution(Operator):
         else:
             total_space = 16.0  # 4x4 plane
 
+        # Add mesh to volume conversion if in volume mode
+        mesh_to_volume_node = None
+        if mode == 'VOLUME':
+            mesh_to_volume_node = nodes.new('GeometryNodeMeshToVolume')
+            mesh_to_volume_node.location = (-600, 0)
+            links = node_group.links
+            links.new(input_node.outputs['Geometry'], mesh_to_volume_node.inputs['Mesh'])
+
         # Create a separate distribution + instance for each combo
         instance_geometries = []
         y_offset = 0
@@ -200,7 +208,13 @@ class BRICKSCOPE_OT_generate_instance_distribution(Operator):
 
             # Connect nodes
             links = node_group.links
-            links.new(input_node.outputs['Geometry'], distribute_node.inputs[geometry_input_name])
+
+            # Connect input geometry to distribute node (with mesh to volume conversion if needed)
+            if mode == 'VOLUME':
+                links.new(mesh_to_volume_node.outputs['Volume'], distribute_node.inputs[geometry_input_name])
+            else:
+                links.new(input_node.outputs['Geometry'], distribute_node.inputs[geometry_input_name])
+
             links.new(distribute_node.outputs['Points'], instance_node.inputs['Points'])
             links.new(object_info_node.outputs['Geometry'], instance_node.inputs['Instance'])
 
