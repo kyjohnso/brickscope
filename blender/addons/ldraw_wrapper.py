@@ -26,7 +26,13 @@ class LDrawImporter:
         Args:
             ldraw_path: Path to LDraw library (e.g., ~/ldraw)
         """
-        self.ldraw_path = Path(ldraw_path) if ldraw_path else None
+        import os
+        # Expand ~ to home directory
+        if ldraw_path:
+            expanded = os.path.expanduser(ldraw_path)
+            self.ldraw_path = Path(expanded)
+        else:
+            self.ldraw_path = None
         self.ldr_tools_py = None
         self.color_table = None
         self._check_dependencies()
