@@ -198,9 +198,15 @@ class BRICKSCOPE_OT_bake_distribution(Operator):
 
         imported_objects = []
 
-        # Calculate grid layout
-        grid_cols = math.ceil(math.sqrt(len(pairs)))
-        grid_spacing = 2.0  # Distance between parts (in Blender units, 2.0 = very visible spacing)
+        # Create mappings for unique part IDs and colors to positions
+        unique_part_ids = list(set(part_id for part_id, _ in pairs))
+        unique_colors = list(set(color_id for _, color_id in pairs))
+
+        part_id_to_x = {part_id: idx for idx, part_id in enumerate(unique_part_ids)}
+        color_id_to_y = {color_id: idx for idx, color_id in enumerate(unique_colors)}
+
+        print(f"Part ID mapping: {part_id_to_x}")
+        print(f"Color ID mapping: {color_id_to_y}")
 
         for idx, (part_id, color_id) in enumerate(pairs):
             # Report progress every 10 parts
@@ -209,49 +215,19 @@ class BRICKSCOPE_OT_bake_distribution(Operator):
 
             color_id_int = int(color_id)
 
-            # Check if part+color is already cached
-            if not cache.has_part(part_id, color_id_int):
-                # Import and add to cache (first occurrence)
-                obj = importer.import_part(part_id, color_id_int)
-                if obj:
-                    cache.add_part(part_id, color_id_int, obj)
-                    print(f"Cached new part: {part_id} color {color_id_int}")
-                else:
-                    print(f"Failed to import part: {part_id} color {color_id_int}")
-                    continue
+            # Import part directly
+            obj = importer.import_part(part_id, color_id_int)
 
-            # Calculate position for this instance
-            grid_x = (idx % grid_cols) * grid_spacing
-            grid_y = (idx // grid_cols) * grid_spacing
+            if obj:
+                # Position based on part type (X) and color (Y)
+                x_pos = part_id_to_x[part_id] * 1.0  # 1 Blender unit per part type
+                y_pos = color_id_to_y[color_id] * 1.0  # 1 Blender unit per color
+                z_pos = 0.0
 
-            # Center the grid
-            offset_x = -(grid_cols * grid_spacing) / 2
-            offset_y = -((len(pairs) // grid_cols) * grid_spacing) / 2
+                obj.location = (x_pos, y_pos, z_pos)
+                print(f"Part {idx}: {part_id} color {color_id} -> X={x_pos}, Y={y_pos} | obj.location = {obj.location}")
 
-            new_location = (
-                grid_x + offset_x,
-                grid_y + offset_y,
-                random.uniform(0, 0.1)  # Slight Z variation
-            )
-
-            # Random rotation for variety
-            new_rotation = (
-                random.uniform(0, math.pi * 2),
-                random.uniform(0, math.pi * 2),
-                random.uniform(0, math.pi * 2)
-            )
-
-            # Create instance at desired location
-            instance = cache.create_instance(
-                part_id,
-                color_id_int,
-                location=new_location,
-                rotation=new_rotation
-            )
-
-            if instance:
-                print(f"Part {idx}: {instance.name} positioned at {new_location}, actual: {instance.location}")
-                imported_objects.append(instance)
+                imported_objects.append(obj)
 
         # Report results
         cache_stats = cache.get_stats()
