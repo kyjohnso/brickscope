@@ -94,8 +94,8 @@ class LDrawImporter:
                 temp_ldr_path = temp_file.name
 
             try:
-                # Deselect all objects before import
-                bpy.ops.object.select_all(action='DESELECT')
+                # Get all objects before import
+                objects_before = set(bpy.data.objects)
 
                 # Call the import operator with the temp .ldr file
                 bpy.ops.import_scene.importldr(
@@ -108,30 +108,32 @@ class LDrawImporter:
                     scene_scale=0.01
                 )
 
-                # Translate all selected objects by directly modifying their location
-                selected = bpy.context.selected_objects
-                print(f"DEBUG: Found {len(selected)} selected objects after import")
+                # Find newly imported objects by comparing before/after
+                objects_after = set(bpy.data.objects)
+                new_objects = list(objects_after - objects_before)
+
+                print(f"DEBUG: Found {len(new_objects)} new objects after import")
                 print(f"DEBUG: Target location = {location}")
 
-                if selected:
-                    for obj in selected:
+                # Translate all new objects by directly modifying their location
+                if new_objects:
+                    for obj in new_objects:
                         old_loc = obj.location.copy()
                         obj.location.x += location[0]
                         obj.location.y += location[1]
                         obj.location.z += location[2]
                         print(f"DEBUG: Moved {obj.name} from {old_loc} to {obj.location}")
 
-                # Get the imported objects - find the top-level parent (empty with no parent)
-                imported_objects = bpy.context.selected_objects
+                # Find the top-level parent (empty with no parent)
                 obj = None
-                for o in imported_objects:
+                for o in new_objects:
                     if o.parent is None:
                         obj = o
                         break
 
-                # Fallback to last selected if no parent-less object found
-                if obj is None and imported_objects:
-                    obj = imported_objects[-1]
+                # Fallback to first object if no parent-less object found
+                if obj is None and new_objects:
+                    obj = new_objects[0]
 
                 if obj:
                     obj.name = f"part_{part_id}_color{color_id}"
