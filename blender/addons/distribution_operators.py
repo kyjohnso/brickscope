@@ -269,6 +269,22 @@ class BRICKSCOPE_OT_bake_distribution(Operator):
 
         self.report({'INFO'}, f"Unparented {len(mesh_objects)} meshes and deleted {len(empties_to_delete)} empty parents")
 
+        # Apply transforms and set origin to geometry center for all meshes
+        self.report({'INFO'}, "Applying transforms and centering origins...")
+        for mesh_obj in mesh_objects:
+            # Select only this object
+            bpy.ops.object.select_all(action='DESELECT')
+            mesh_obj.select_set(True)
+            context.view_layer.objects.active = mesh_obj
+
+            # Apply all transforms (location, rotation, scale)
+            bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+
+            # Set origin to geometry center (bounding box center)
+            bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+
+        self.report({'INFO'}, f"Applied transforms and centered origins for {len(mesh_objects)} meshes")
+
         # Report results
         cache_stats = cache.get_stats()
         self.report({'INFO'},
