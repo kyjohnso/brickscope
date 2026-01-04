@@ -197,8 +197,10 @@ class BRICKSCOPE_OT_bake_distribution(Operator):
         self.report({'INFO'}, f"Importing {len(pairs)} parts...")
 
         imported_objects = []
-        scatter_radius = 2.0  # Parts scattered within this radius
-        height_offset = 3.0   # Start height for parts
+
+        # Calculate grid layout
+        grid_cols = math.ceil(math.sqrt(len(pairs)))
+        grid_spacing = 0.15  # Distance between parts (in Blender units)
 
         for idx, (part_id, color_id) in enumerate(pairs):
             # Report progress every 10 parts
@@ -209,13 +211,21 @@ class BRICKSCOPE_OT_bake_distribution(Operator):
             obj = importer.import_part(part_id, int(color_id))
 
             if obj:
-                # Scatter placement (random position and rotation)
+                # Grid placement (centered at origin)
+                grid_x = (idx % grid_cols) * grid_spacing
+                grid_y = (idx // grid_cols) * grid_spacing
+
+                # Center the grid
+                offset_x = -(grid_cols * grid_spacing) / 2
+                offset_y = -((len(pairs) // grid_cols) * grid_spacing) / 2
+
                 obj.location = (
-                    random.uniform(-scatter_radius, scatter_radius),
-                    random.uniform(-scatter_radius, scatter_radius),
-                    height_offset + random.uniform(0, 2.0)
+                    grid_x + offset_x,
+                    grid_y + offset_y,
+                    random.uniform(0, 0.1)  # Slight Z variation
                 )
 
+                # Random rotation for variety
                 obj.rotation_euler = (
                     random.uniform(0, math.pi * 2),
                     random.uniform(0, math.pi * 2),

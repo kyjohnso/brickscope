@@ -15,7 +15,7 @@ class BrickScopePreferences(AddonPreferences):
     ldraw_library_path: StringProperty(
         name="LDraw Library Path",
         description="Path to LDraw parts library (download from ldraw.org)",
-        default="",
+        default="~/projects/brickscope/data/ldraw",
         subtype='DIR_PATH',
     )
 
