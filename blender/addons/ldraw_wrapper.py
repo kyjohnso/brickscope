@@ -58,7 +58,7 @@ class LDrawImporter:
             print("  https://github.com/ScanMountGoat/ldr_tools_blender")
             print(f"Error: {e}")
 
-    def import_part(self, part_id, color_id=4):
+    def import_part(self, part_id, color_id=4, location=(0, 0, 0)):
         """
         Import a single LDraw part with specified color
 
@@ -108,6 +108,11 @@ class LDrawImporter:
                     scene_scale=0.01
                 )
 
+                # Translate all selected objects (parent and children together) using operator
+                if bpy.context.selected_objects:
+                    bpy.ops.transform.translate(value=location)
+                    print(f"Translated {len(bpy.context.selected_objects)} objects by {location}")
+
                 # Get the imported objects - find the top-level parent (empty with no parent)
                 imported_objects = bpy.context.selected_objects
                 obj = None
@@ -122,7 +127,7 @@ class LDrawImporter:
 
                 if obj:
                     obj.name = f"part_{part_id}_color{color_id}"
-                    print(f"Successfully imported part {part_id} with color {color_id} at location {obj.location}")
+                    print(f"Successfully imported part {part_id} with color {color_id} - parent at {obj.location}")
 
                 return obj
 
