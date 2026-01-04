@@ -242,6 +242,30 @@ class BRICKSCOPE_OT_bake_distribution(Operator):
             else:
                 print(f"=== FAILED to import part {part_id} color {color_id} ===")
 
+        # Unparent mesh children from empty parents and delete empties
+        self.report({'INFO'}, "Cleaning up hierarchy - unparenting meshes from empties...")
+        empties_to_delete = []
+        mesh_objects = []
+
+        for parent_obj in imported_objects:
+            if parent_obj.type == 'EMPTY':
+                # Find all mesh children
+                for child in parent_obj.children:
+                    if child.type == 'MESH':
+                        # Unparent and keep world transform
+                        child.parent = None
+                        child.matrix_parent_inverse.identity()
+                        mesh_objects.append(child)
+
+                # Mark empty for deletion
+                empties_to_delete.append(parent_obj)
+
+        # Delete empty parents
+        for empty in empties_to_delete:
+            bpy.data.objects.remove(empty, do_unlink=True)
+
+        self.report({'INFO'}, f"Unparented {len(mesh_objects)} meshes and deleted {len(empties_to_delete)} empty parents")
+
         # Report results
         cache_stats = cache.get_stats()
         self.report({'INFO'},
