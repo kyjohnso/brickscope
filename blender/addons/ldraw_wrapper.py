@@ -108,9 +108,12 @@ class LDrawImporter:
                     scene_scale=0.01
                 )
 
-                # Translate all selected objects (parent and children together) using operator
-                if bpy.context.selected_objects:
-                    bpy.ops.transform.translate(value=location)
+                # Translate all selected objects by directly modifying their location
+                if bpy.context.selected_objects and location != (0, 0, 0):
+                    for obj in bpy.context.selected_objects:
+                        obj.location.x += location[0]
+                        obj.location.y += location[1]
+                        obj.location.z += location[2]
                     print(f"Translated {len(bpy.context.selected_objects)} objects by {location}")
 
                 # Get the imported objects - find the top-level parent (empty with no parent)
