@@ -179,9 +179,11 @@ class BRICKSCOPE_OT_generate_instance_distribution(Operator):
             if mode == 'VOLUME':
                 distribute_node = nodes.new('GeometryNodeDistributePointsInVolume')
                 distribute_node.inputs['Density'].default_value = count / total_space
+                geometry_input_name = 'Volume'  # Volume mode uses 'Volume' input
             else:
                 distribute_node = nodes.new('GeometryNodeDistributePointsOnFaces')
                 distribute_node.inputs['Density'].default_value = count / total_space
+                geometry_input_name = 'Mesh'  # Face mode uses 'Mesh' input
 
             distribute_node.location = (-400, y_offset)
             distribute_node.inputs['Seed'].default_value = idx  # Different seed per combo
@@ -198,7 +200,7 @@ class BRICKSCOPE_OT_generate_instance_distribution(Operator):
 
             # Connect nodes
             links = node_group.links
-            links.new(input_node.outputs['Geometry'], distribute_node.inputs['Mesh'])
+            links.new(input_node.outputs['Geometry'], distribute_node.inputs[geometry_input_name])
             links.new(distribute_node.outputs['Points'], instance_node.inputs['Points'])
             links.new(object_info_node.outputs['Geometry'], instance_node.inputs['Instance'])
 
