@@ -220,12 +220,16 @@ class BRICKSCOPE_OT_bake_distribution(Operator):
             y_pos = color_id_to_y[color_id] * 1.0  # 1 Blender unit per color
             z_pos = 0.0
 
+            print(f"=== IMPORTING Part {idx}: {part_id} color {color_id} -> target position X={x_pos}, Y={y_pos} ===")
+
             # Import part and translate it during import
             obj = importer.import_part(part_id, color_id_int, location=(x_pos, y_pos, z_pos))
 
             if obj:
-                print(f"Part {idx}: {part_id} color {color_id} -> X={x_pos}, Y={y_pos} | obj.location = {obj.location}")
+                print(f"=== RESULT: {obj.name} final location = {obj.location} ===")
                 imported_objects.append(obj)
+            else:
+                print(f"=== FAILED to import part {part_id} color {color_id} ===")
 
         # Report results
         cache_stats = cache.get_stats()

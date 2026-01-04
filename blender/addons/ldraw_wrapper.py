@@ -109,12 +109,17 @@ class LDrawImporter:
                 )
 
                 # Translate all selected objects by directly modifying their location
-                if bpy.context.selected_objects and location != (0, 0, 0):
-                    for obj in bpy.context.selected_objects:
+                selected = bpy.context.selected_objects
+                print(f"DEBUG: Found {len(selected)} selected objects after import")
+                print(f"DEBUG: Target location = {location}")
+
+                if selected:
+                    for obj in selected:
+                        old_loc = obj.location.copy()
                         obj.location.x += location[0]
                         obj.location.y += location[1]
                         obj.location.z += location[2]
-                    print(f"Translated {len(bpy.context.selected_objects)} objects by {location}")
+                        print(f"DEBUG: Moved {obj.name} from {old_loc} to {obj.location}")
 
                 # Get the imported objects - find the top-level parent (empty with no parent)
                 imported_objects = bpy.context.selected_objects
