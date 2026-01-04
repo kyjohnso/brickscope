@@ -6,6 +6,7 @@ User settings and configuration
 import bpy
 from bpy.types import AddonPreferences
 from bpy.props import StringProperty, IntProperty, BoolProperty
+from pathlib import Path
 
 
 class BrickScopePreferences(AddonPreferences):
@@ -15,7 +16,7 @@ class BrickScopePreferences(AddonPreferences):
     ldraw_library_path: StringProperty(
         name="LDraw Library Path",
         description="Path to LDraw parts library (download from ldraw.org)",
-        default="",  # Let user set, or use auto-detect
+        default=str(Path.home() / "projects" / "brickscope" / "data" / "ldraw"),
         subtype='DIR_PATH',
     )
 
