@@ -15,7 +15,7 @@ class BrickScopePreferences(AddonPreferences):
     ldraw_library_path: StringProperty(
         name="LDraw Library Path",
         description="Path to LDraw parts library (download from ldraw.org)",
-        default="",
+        default="",  # Let user set, or use auto-detect
         subtype='DIR_PATH',
     )
 
@@ -60,7 +60,12 @@ class BrickScopePreferences(AddonPreferences):
 
         box = layout.box()
         box.label(text="Asset Paths", icon='FILE_FOLDER')
-        box.prop(self, "ldraw_library_path")
+
+        # LDraw path with helper button
+        row = box.row()
+        row.prop(self, "ldraw_library_path")
+        row.operator("brickscope.set_default_ldraw_path", text="", icon='FILE_REFRESH')
+
         box.prop(self, "output_directory")
 
         layout.separator()

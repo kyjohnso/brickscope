@@ -4,7 +4,11 @@ Provides programmatic import with caching
 """
 
 import bpy
+import math
+import tempfile
+import os
 from pathlib import Path
+from mathutils import Euler
 
 
 class LDrawImporter:
@@ -22,28 +26,45 @@ class LDrawImporter:
         Args:
             ldraw_path: Path to LDraw library (e.g., ~/ldraw)
         """
-        self.ldraw_path = Path(ldraw_path) if ldraw_path else None
+        import os
+        # Expand ~ to home directory
+        if ldraw_path:
+            expanded = os.path.expanduser(ldraw_path)
+            self.ldraw_path = Path(expanded)
+        else:
+            self.ldraw_path = None
+        self.ldr_tools_py = None
+        self.color_table = None
         self._check_dependencies()
 
     def _check_dependencies(self):
-        """Check if ldr_tools_blender is installed"""
+        """Check if ldr_tools_blender is installed and import it"""
         try:
-            # Try to import ldr_tools_blender
-            # TODO: Adjust import based on actual addon structure
-            import ldr_tools_blender
+            # Import ldr_tools_py from the ldr_tools_blender addon
+            import ldr_tools_blender.ldr_tools_py as ldr_tools_py
+            self.ldr_tools_py = ldr_tools_py
             self.has_ldr_tools = True
-        except ImportError:
+
+            # Load color table if ldraw_path is set
+            if self.ldraw_path and self.ldraw_path.exists():
+                try:
+                    self.color_table = self.ldr_tools_py.load_color_table(str(self.ldraw_path))
+                except Exception as e:
+                    print(f"WARNING: Could not load LDraw color table: {e}")
+
+        except ImportError as e:
             self.has_ldr_tools = False
             print("WARNING: ldr_tools_blender not found. Install from:")
             print("  https://github.com/ScanMountGoat/ldr_tools_blender")
+            print(f"Error: {e}")
 
-    def import_part(self, part_id, color_id=None):
+    def import_part(self, part_id, color_id=4, location=(0, 0, 0)):
         """
-        Import a single LDraw part
+        Import a single LDraw part with specified color
 
         Args:
             part_id: LDraw part number (e.g., "3001" for 2x4 brick)
-            color_id: LDraw color ID (optional, defaults to part's default)
+            color_id: LDraw color ID (default 4 = red)
 
         Returns:
             Blender object, or None if import failed
@@ -61,17 +82,79 @@ class LDrawImporter:
             print(f"Part file not found: {part_file}")
             return None
 
-        # TODO: Call ldr_tools_blender import function programmatically
-        # For now, create a placeholder cube
-        print(f"TODO: Import part {part_id} from {part_file}")
+        try:
+            # Create a temporary .ldr file that references the part with the color
+            # LDR format: 1 <color> <x> <y> <z> <a> <b> <c> <d> <e> <f> <g> <h> <i> <part.dat>
+            # Identity matrix at origin: 1 0 0  0 1 0  0 0 1
+            temp_ldr_content = f"0 BrickScope temp part\n1 {color_id} 0 0 0 1 0 0 0 1 0 0 0 1 {part_id}.dat\n"
 
-        bpy.ops.mesh.primitive_cube_add()
-        obj = bpy.context.active_object
-        obj.name = f"part_{part_id}"
+            # Create temp file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.ldr', delete=False) as temp_file:
+                temp_file.write(temp_ldr_content)
+                temp_ldr_path = temp_file.name
 
-        return obj
+            try:
+                # Get all objects before import
+                objects_before = set(bpy.data.objects)
 
-    def create_part_instance(self, part_id, location=(0, 0, 0), rotation=(0, 0, 0), color_id=None):
+                # Call the import operator with the temp .ldr file
+                bpy.ops.import_scene.importldr(
+                    filepath=temp_ldr_path,
+                    ldraw_path=str(self.ldraw_path),
+                    instance_type='LinkedDuplicates',
+                    stud_type='Logo4',
+                    primitive_resolution='High',
+                    add_gap_between_parts=False,
+                    scene_scale=0.01
+                )
+
+                # Find newly imported objects by comparing before/after
+                objects_after = set(bpy.data.objects)
+                new_objects = list(objects_after - objects_before)
+
+                print(f"DEBUG: Found {len(new_objects)} new objects after import")
+                print(f"DEBUG: Target location = {location}")
+
+                # Translate all new objects by directly modifying their location
+                if new_objects:
+                    for obj in new_objects:
+                        old_loc = obj.location.copy()
+                        obj.location.x += location[0]
+                        obj.location.y += location[1]
+                        obj.location.z += location[2]
+                        print(f"DEBUG: Moved {obj.name} from {old_loc} to {obj.location}")
+
+                # Find the top-level parent (empty with no parent)
+                obj = None
+                for o in new_objects:
+                    if o.parent is None:
+                        obj = o
+                        break
+
+                # Fallback to first object if no parent-less object found
+                if obj is None and new_objects:
+                    obj = new_objects[0]
+
+                if obj:
+                    obj.name = f"part_{part_id}_color{color_id}"
+                    print(f"Successfully imported part {part_id} with color {color_id} - parent at {obj.location}")
+
+                return obj
+
+            finally:
+                # Clean up temp file
+                try:
+                    os.unlink(temp_ldr_path)
+                except:
+                    pass
+
+        except Exception as e:
+            print(f"Error importing part {part_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def create_part_instance(self, part_id, location=(0, 0, 0), rotation=(0, 0, 0), color_id=4):
         """
         Import or instance a part at specified location/rotation
 
@@ -81,15 +164,12 @@ class LDrawImporter:
             part_id: LDraw part number
             location: (x, y, z) position
             rotation: (rx, ry, rz) rotation in radians
-            color_id: LDraw color ID
+            color_id: LDraw color ID (default 4 = red)
 
         Returns:
             Blender object instance
         """
-        # TODO: Check cache first
-        # TODO: If not cached, import and cache
-        # TODO: Create instance from cached object
-
+        # Import the part (will use caching via part_cache.py separately)
         obj = self.import_part(part_id, color_id)
         if obj:
             obj.location = location
