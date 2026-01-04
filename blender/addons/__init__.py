@@ -25,6 +25,8 @@ bl_info = {
     "category": "3D View",
 }
 
+import bpy
+from bpy.props import PointerProperty
 from . import auto_load
 
 auto_load.init()
@@ -33,6 +35,13 @@ auto_load.init()
 def register():
     auto_load.register()
 
+    # Register scene properties after all classes are registered
+    from .distribution_properties import DistributionProperties
+    bpy.types.Scene.brickscope_distribution = PointerProperty(type=DistributionProperties)
+
 
 def unregister():
+    # Remove scene properties before unregistering classes
+    del bpy.types.Scene.brickscope_distribution
+
     auto_load.unregister()

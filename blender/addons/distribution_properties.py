@@ -162,17 +162,5 @@ def initialize_default_distributions(context):
         item.weight = weight
 
 
-def register():
-    bpy.utils.register_class(PartDistributionItem)
-    bpy.utils.register_class(ColorDistributionItem)
-    bpy.utils.register_class(DistributionProperties)
-
-    bpy.types.Scene.brickscope_distribution = PointerProperty(type=DistributionProperties)
-
-
-def unregister():
-    del bpy.types.Scene.brickscope_distribution
-
-    bpy.utils.unregister_class(DistributionProperties)
-    bpy.utils.unregister_class(ColorDistributionItem)
-    bpy.utils.unregister_class(PartDistributionItem)
+# Note: Registration is handled by auto_load.py
+# Scene property is registered in __init__.py after all classes are registered
