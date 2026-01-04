@@ -454,6 +454,217 @@ render_time: ~60 sec/image
 
 ---
 
+## Distribution Control System (Visual + Programmatic)
+
+**Implementation Status:** In development (feature/distribution-control branch)
+
+### Overview
+
+Visual system for controlling part and color distributions with real-time preview and programmatic API for dataset generation.
+
+### Architecture
+
+**Three-Phase Workflow:**
+
+```
+Phase 1: Define Distribution (UI + Sliders)
+    ↓
+Phase 2: Preview (Geometry Nodes - Real-time)
+    ↓
+Phase 3: Bake (Import Real Parts - For Rendering)
+```
+
+### Phase 1: Distribution Definition (UI)
+
+**Part Distribution:**
+- UI List with weight sliders for each part type
+- Add/remove parts dynamically
+- Example: `Brick 2x4 (weight: 1.0)`, `Plate 2x2 (weight: 0.7)`
+
+**Color Distribution:**
+- UI List with weight sliders for each color
+- Example: `Red (weight: 1.0)`, `Blue (weight: 0.5)`
+
+**Generation Settings:**
+- Total pieces count (e.g., 100 pieces)
+- Random seed (for reproducibility)
+
+**Features:**
+- Normalize weights button (sum to 1.0)
+- Load defaults (common parts/colors preset)
+- Save/load distribution configs (JSON)
+- Real-time weight statistics display
+
+### Phase 2: Preview Mode (Geometry Nodes)
+
+**Purpose:** Instant visual feedback without importing actual parts
+
+**Implementation:**
+- Scatter points in volume (or on surface)
+- Instance parts on points using geometry nodes
+- Weight-based selection (heavier weights = more instances)
+- Update in real-time as user adjusts sliders
+
+**Benefits:**
+- ✅ Instant feedback (no waiting for imports)
+- ✅ Interactive exploration of distributions
+- ✅ Lightweight (instances, not real objects)
+- ✅ See distribution before committing to import
+
+### Phase 3: Bake Mode (Real Object Import)
+
+**Purpose:** Create actual LEGO parts for physics simulation and rendering
+
+**Workflow:**
+1. **Sample Distribution:**
+   - Use weighted random sampling
+   - Generate list of (part_id, color_id) pairs
+   - Example: `[(3001, 4), (3003, 1), (3001, 4), ...]` = 50x red 2x4, 30x blue 2x2, etc.
+
+2. **Import Parts:**
+   - Call `ldraw_wrapper.py` for each unique (part_id, color_id)
+   - Use `part_cache.py` for efficiency (import once, instance many)
+   - Apply colors via ldr_tools_blender
+
+3. **Place Objects:**
+   - Scatter placement (random positions/rotations)
+   - OR prepare for physics simulation (drop from height)
+
+4. **Result:**
+   - Real Blender objects with proper materials
+   - Ready for rigid body physics
+   - Ready for Cycles rendering with annotations
+
+### Multi-Distribution Mixing
+
+**Goal:** Combine multiple distributions for complex scenarios
+
+**Use Cases:**
+
+**Example 1: Set-Specific + Common Parts**
+```json
+{
+  "layers": [
+    {
+      "name": "Black Seas Barracuda Set",
+      "source": "rebrickable:6285",
+      "count": 50,
+      "weight": 1.0
+    },
+    {
+      "name": "Common Filler Bricks",
+      "parts": ["3001", "3003", "3004"],
+      "colors": ["4", "1", "14"],
+      "count": 150,
+      "weight": 0.8
+    }
+  ]
+}
+```
+
+**Example 2: Realistic Bucket (Multiple Sets Mixed)**
+```json
+{
+  "layers": [
+    {"name": "Set A", "count": 200, "weight": 1.0},
+    {"name": "Set B", "count": 100, "weight": 0.5},
+    {"name": "Random Parts", "count": 500, "weight": 0.3}
+  ]
+}
+```
+
+### Set-Based Import (Future Feature)
+
+**Goal:** Automatically populate distributions from LEGO set inventories
+
+**Data Sources:**
+- Rebrickable API (https://rebrickable.com/api/)
+- Parse LDraw .mpd files
+- Custom set inventory JSON files
+
+**Workflow:**
+1. User enters set number (e.g., "6285")
+2. Fetch set inventory from API
+3. Populate distribution with:
+   - All unique part types
+   - Correct colors
+   - Piece counts matching set
+4. User can adjust weights/counts before generating
+
+**Example Sets:**
+- 6285: Black Seas Barracuda (~900 pieces, ~150 unique parts)
+- 10179: Millennium Falcon UCS (~5000 pieces, ~400 unique parts)
+
+### Data Structures
+
+**Distribution Config (JSON):**
+```json
+{
+  "parts": [
+    {"id": "3001", "name": "Brick 2x4", "weight": 1.0},
+    {"id": "3003", "name": "Brick 2x2", "weight": 0.9}
+  ],
+  "colors": [
+    {"id": "4", "name": "Red", "weight": 1.0},
+    {"id": "1", "name": "Blue", "weight": 0.5}
+  ],
+  "total_pieces": 100,
+  "seed": 12345
+}
+```
+
+**Sampling Output:**
+```python
+# From 100 pieces with above distribution:
+[
+  ("3001", "4"),  # Red 2x4
+  ("3003", "1"),  # Blue 2x2
+  ("3001", "4"),  # Red 2x4
+  ...
+  # Total: 100 (part_id, color_id) pairs
+]
+```
+
+### Implementation Status
+
+**✅ Completed:**
+- `distribution_manager.py` - Weighted sampling logic
+- `distribution_properties.py` - Blender scene properties
+- `distribution_operators.py` - Add/remove/normalize
+- `distribution_ui.py` - UI lists with weight sliders
+- UI panel with part/color lists
+- Save/load distribution configs
+- Preset distributions (common parts/colors)
+
+**🚧 In Progress:**
+- None (ready for next phase)
+
+**📋 TODO:**
+- Geometry nodes preview system
+- Bake functionality (sample → import → place)
+- Multi-distribution mixing
+- Set-based import (Rebrickable API)
+- Distribution presets library
+
+### Key Benefits
+
+**For Artists:**
+- Visual, intuitive control
+- Instant preview
+- Easy experimentation
+
+**For ML Engineers:**
+- Programmatic API (JSON configs)
+- Reproducible (seed-based)
+- Scalable (batch generation)
+
+**For Researchers:**
+- Controlled distributions for ablation studies
+- Easy to vary part/color ratios
+- Dataset diversity metrics
+
+---
+
 ## Render Performance Calculations
 
 ### Computational Requirements
