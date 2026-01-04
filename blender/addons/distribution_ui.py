@@ -118,5 +118,5 @@ class BRICKSCOPE_PT_distribution_panel(bpy.types.Panel):
         layout.separator()
         col = layout.column(align=True)
         col.scale_y = 1.5
-        col.operator("brickscope.generate_preview", icon='HIDE_OFF')
-        col.operator("brickscope.bake_distribution", icon='MESH_DATA')
+        col.operator("brickscope.generate_instance_distribution", icon='PARTICLES', text="Generate Instances")
+        col.operator("brickscope.bake_distribution", icon='MESH_DATA', text="Bake to Real Objects")
