@@ -200,7 +200,7 @@ class BRICKSCOPE_OT_bake_distribution(Operator):
 
         # Calculate grid layout
         grid_cols = math.ceil(math.sqrt(len(pairs)))
-        grid_spacing = 0.15  # Distance between parts (in Blender units)
+        grid_spacing = 0.5  # Distance between parts (in Blender units, increased for visibility)
 
         for idx, (part_id, color_id) in enumerate(pairs):
             # Report progress every 10 parts
