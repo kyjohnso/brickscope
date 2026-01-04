@@ -87,7 +87,11 @@ class BRICKSCOPE_OT_setup_physics(Operator):
 
         # Add passive rigid body if not already present
         if plane.rigid_body is None:
-            bpy.ops.rigidbody.object_add({'object': plane})
+            # Set as active object and add rigid body
+            context.view_layer.objects.active = plane
+            plane.select_set(True)
+            bpy.ops.rigidbody.object_add()
+
             plane.rigid_body.type = 'PASSIVE'
             plane.rigid_body.collision_shape = 'MESH'
             plane.rigid_body.friction = self.friction
@@ -101,7 +105,8 @@ class BRICKSCOPE_OT_setup_physics(Operator):
         if obj.rigid_body is None:
             # Need to set context correctly for operator
             bpy.context.view_layer.objects.active = obj
-            bpy.ops.rigidbody.object_add({'object': obj})
+            obj.select_set(True)
+            bpy.ops.rigidbody.object_add()
 
         # Configure rigid body settings optimized for LEGO parts
         rb = obj.rigid_body
@@ -199,7 +204,8 @@ class BRICKSCOPE_OT_clear_physics(Operator):
         # Remove rigid body from each object
         for obj in target_objects:
             bpy.context.view_layer.objects.active = obj
-            bpy.ops.rigidbody.object_remove({'object': obj})
+            obj.select_set(True)
+            bpy.ops.rigidbody.object_remove()
 
         self.report({'INFO'}, f"Cleared physics from {len(target_objects)} objects")
         return {'FINISHED'}
