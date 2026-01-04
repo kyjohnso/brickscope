@@ -73,27 +73,40 @@ class BRICKSCOPE_OT_generate_instance_distribution(Operator):
             self.report({'ERROR'}, "ldr_tools_blender not found. Install from github.com/ScanMountGoat/ldr_tools_blender")
             return {'CANCELLED'}
 
-        # Import all unique part+color combinations (cache them)
+        # Import all unique part+color combinations
+        # For geometry nodes, we need visible reference objects (not hidden cache)
         unique_combos = list(set(pairs))
         self.report({'INFO'}, f"Importing {len(unique_combos)} unique part+color combinations...")
+
+        # Create a collection for geometry node reference objects
+        ref_collection_name = "BrickScope_GeoNodeReferences"
+        if ref_collection_name in bpy.data.collections:
+            ref_collection = bpy.data.collections[ref_collection_name]
+            # Clear existing objects
+            for obj in list(ref_collection.objects):
+                bpy.data.objects.remove(obj, do_unlink=True)
+        else:
+            ref_collection = bpy.data.collections.new(ref_collection_name)
+            context.scene.collection.children.link(ref_collection)
+            # Hide collection in viewport outliner (but keep enabled for geometry nodes)
+            ref_collection.hide_viewport = True
 
         combo_to_object = {}
         for part_id, color_id in unique_combos:
             color_id_int = int(color_id)
 
-            # Import if not cached
-            if not cache.has_part(part_id, color_id_int):
-                obj = importer.import_part(part_id, color_id_int, location=(0, 0, 0))
-                if obj:
-                    cache.add_part(part_id, color_id_int, obj)
-                else:
-                    self.report({'WARNING'}, f"Failed to import {part_id} color {color_id_int}")
-                    continue
+            # Always import fresh for geometry nodes (don't use cache)
+            obj = importer.import_part(part_id, color_id_int, location=(0, 0, 0))
+            if obj:
+                # Move to reference collection (visible, but separate)
+                for col in obj.users_collection:
+                    col.objects.unlink(obj)
+                ref_collection.objects.link(obj)
+                obj.name = f"geonode_ref_{part_id}_color{color_id_int}"
 
-            # Get cached object
-            cached_obj = cache.get_part(part_id, color_id_int)
-            if cached_obj:
-                combo_to_object[(part_id, color_id)] = cached_obj
+                combo_to_object[(part_id, color_id)] = obj
+            else:
+                self.report({'WARNING'}, f"Failed to import {part_id} color {color_id_int}")
 
         # Create collection for instances
         collection_name = "BrickScope_Instances"
